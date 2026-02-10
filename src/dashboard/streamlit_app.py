@@ -19,6 +19,7 @@ st.set_page_config(
 
 # --- Title and Header ---
 st.title("🚀 AI-Driven Intelligent Benchmark Analysis Platform")
+st.caption("v1.1 - Robust Validation Active")
 st.markdown("""
 This platform uses **Artificial Intelligence** to analyze system benchmark metrics. 
 It detects anomalies, scores performance, and provides actionable recommendations.
@@ -118,6 +119,13 @@ if df is not None:
             try:
                 # Prepare data for AI
                 metrics = df.to_dict(orient="records")
+                
+                # Explicitly check for required columns here too, to bypass any caching issues
+                required_cols = ["cpu_usage", "memory_usage", "disk_io", "network_latency", "throughput"]
+                missing = [c for c in required_cols if c not in df.columns]
+                if missing:
+                     raise ValueError(f"Required benchmark columns missing: {', '.join(missing)}")
+                
                 results = ai.detect_anomalies(metrics)
                 
                 # Merge results back to DF
