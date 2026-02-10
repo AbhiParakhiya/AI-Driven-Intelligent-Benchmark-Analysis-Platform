@@ -19,14 +19,15 @@ class BenchmarkAI:
         """Trains Isolation Forest on benchmark data."""
         if data_path is None:
              script_dir = os.path.dirname(os.path.abspath(__file__))
-             data_path = os.path.normpath(os.path.join(script_dir, "..", "..", "data", "benchmark_data.csv"))
+             data_path = os.path.normpath(os.path.join(script_dir, "..", "..", "data", "transaction_data.csv"))
 
         if not os.path.exists(data_path):
             print(f"Data file not found at {data_path}")
             return
 
         df = pd.read_csv(data_path)
-        features = ["cpu_usage", "memory_usage", "disk_io", "network_latency", "throughput"]
+        # Numerical features for transaction anomaly detection
+        features = ["amount", "tx_hour", "account_age_days"]
         
         # Fit scaler
         X = self.scaler.fit_transform(df[features])
@@ -55,13 +56,14 @@ class BenchmarkAI:
         scaler = joblib.load(self.scaler_path)
 
         df = pd.DataFrame(metrics)
-        features = ["cpu_usage", "memory_usage", "disk_io", "network_latency", "throughput"]
+        # Transaction-specific features
+        features = ["amount", "tx_hour", "account_age_days"]
         
         # Validate that all required features are present
         missing_features = [f for f in features if f not in df.columns]
         if missing_features:
-            raise ValueError(f"Missing required benchmark columns: {', '.join(missing_features)}. "
-                             "Please ensure your CSV contains these metrics.")
+            raise ValueError(f"Missing required transaction columns: {', '.join(missing_features)}. "
+                             "Please ensure your CSV contains these fields.")
         
         X = scaler.transform(df[features])
         predictions = model.predict(X) # -1 for anomaly, 1 for normal
@@ -81,55 +83,57 @@ class BenchmarkAI:
         return results
 
     def calculate_performance_score(self, row):
-        """Calculates a 0-100 performance score based on weighted metrics."""
-        # Weights (higher usage/latency = lower score)
-        # We invert the metrics to get a score where higher is better.
-        
-        # Max-Min Normalization bounds (approximate from data gen)
-        max_cpu = 100
-        max_mem = 8192
-        max_latency = 1000
-        
-        # Let's define score as: 100 - (deductions)
+        """Calculates a 0-100 risk/health score based on transaction metrics."""
+        # For transactions, "health" might mean "normalcy" or "low risk"
         score = 100
         
         try:
-            if row.get("cpu_usage", 0) > 80: score -= 20
-            if row.get("memory_usage", 0) > 6000: score -= 20
-            if row.get("network_latency", 0) > 200: score -= 30
+            # Simple heuristics for risky transactions
+            amount = row.get("amount", 0)
+            account_age = row.get("account_age_days", 365)
+            tx_hour = row.get("tx_hour", 12)
             
-            # Throughput bonus
-            if row.get("throughput", 0) > 1000: score += 10
+            # Deduction for very large amounts
+            if amount > 100000: score -= 30
+            elif amount > 50000: score -= 15
+            
+            # Deduction for very new accounts making large transactions
+            if account_age < 30 and amount > 1000: score -= 40
+            
+            # Deduction for odd-hour transactions (e.g., 2 AM - 5 AM)
+            if tx_hour >= 2 and tx_hour <= 5: score -= 20
+            
         except Exception:
-            # Fallback if row is not dict-like or missing keys (though upstream validates)
             pass
             
         return max(0, min(100, score))
 
     def generate_recommendation(self, row, is_anomaly):
-        """Generates natural language recommendations."""
+        """Generates natural language insights for transactions."""
         recommendations = []
         
         if is_anomaly:
-            recommendations.append("Anomaly Detected! Immediate investigation required.")
+            recommendations.append("🚩 High-Risk Pattern: This transaction deviates significantly from typical behavior.")
         
         try:
-            if row.get("cpu_usage", 0) > 85:
-                recommendations.append("High CPU Usage: Consider scaling up CPU resources or optimizing process threads.")
+            amount = row.get("amount", 0)
+            account_age = row.get("account_age_days", 365)
+            tx_hour = row.get("tx_hour", 12)
             
-            if row.get("memory_usage", 0) > 6000:
-                recommendations.append("High Memory Usage: Potential memory leak or insufficient RAM. check allocators.")
+            if amount > 100000:
+                recommendations.append("Extreme Value: Unusually large transaction amount.")
+            
+            if account_age < 30:
+                recommendations.append("New Account: Transaction originated from an account less than 30 days old.")
                 
-            if row.get("network_latency", 0) > 100:
-                recommendations.append("Network Lag: Check regional endpoints or CDN configuration.")
+            if tx_hour >= 2 and tx_hour <= 5:
+                recommendations.append("Off-Peak Timing: Transaction occurred during unusual late-night hours.")
                 
-            if row.get("disk_io", 0) < 10:
-                recommendations.append("Low Disk I/O: Possible bottleneck in storage subsystem.")
         except Exception:
             pass
 
         if not recommendations:
-            recommendations.append("System performing within normal parameters.")
+            recommendations.append("Transaction appears consistent with normal usage patterns.")
             
         return " ".join(recommendations)
 

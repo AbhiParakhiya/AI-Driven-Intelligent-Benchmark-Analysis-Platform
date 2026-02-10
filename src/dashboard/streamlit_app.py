@@ -5,57 +5,27 @@ import sys
 import os
 
 # Add src to python path to import modules
-# This allows importing ai_engine and data_gen directly
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from ai_engine.model import BenchmarkAI
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="AI Benchmark Platform",
-    page_icon="🚀",
+    page_title="AI Transaction Insight Platform",
+    page_icon="💸",
     layout="wide"
 )
 
 # --- Title and Header ---
-st.title("🚀 AI-Driven Intelligent Benchmark Analysis Platform")
-st.caption("v1.1 - Robust Validation Active")
+st.title("💸 AI-Driven Intelligent Transaction Analysis Platform")
 st.markdown("""
-This platform uses **Artificial Intelligence** to analyze system benchmark metrics. 
-It detects anomalies, scores performance, and provides actionable recommendations.
+This platform uses **Artificial Intelligence** to analyze transaction patterns. 
+It detects high-risk anomalies, scores transaction safety, and provides insights for financial monitoring.
 """)
 
 # --- Sidebar Configuration ---
 st.sidebar.header("⚙️ Configuration")
 data_source = st.sidebar.radio("Select Data Source", ["Generate Synthetic Data", "Upload CSV"])
-
-if data_source == "Upload CSV":
-    st.sidebar.info("""
-    **Required CSV Columns:**
-    - `cpu_usage` (%)
-    - `memory_usage` (MB)
-    - `disk_io` (MB/s)
-    - `network_latency` (ms)
-    - `throughput` (req/s)
-    """)
-    
-    # Provide a sample template for download
-    sample_data = {
-        "cpu_usage": [45.2, 88.1, 32.5],
-        "memory_usage": [3072, 7168, 2048],
-        "disk_io": [120, 5, 150],
-        "network_latency": [25, 450, 15],
-        "throughput": [1200, 300, 1400]
-    }
-    sample_df = pd.DataFrame(sample_data)
-    csv = sample_df.to_csv(index=False).encode('utf-8')
-    st.sidebar.download_button(
-        label="📥 Download Sample Template",
-        data=csv,
-        file_name="benchmark_template.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
 
 # --- AI Engine Loading ---
 @st.cache_resource
@@ -66,7 +36,7 @@ def load_ai_engine():
 try:
     ai = load_ai_engine()
 except Exception as e:
-    st.error(f"Failed to load AI Engine. Make sure models are trained. Error: {e}")
+    st.error(f"Failed to load AI Engine. Error: {e}")
     st.stop()
 
 # --- Main Logic ---
@@ -74,23 +44,30 @@ df = None
 
 if data_source == "Generate Synthetic Data":
     st.sidebar.subheader("Simulation Settings")
-    duration = st.sidebar.slider("Duration (minutes)", 1, 60, 10, help="How long the benchmark runs.")
+    duration = st.sidebar.slider("Number of Records", 100, 5000, 1000)
     
-    if st.sidebar.button("Run Simulation", type="primary"):
-        with st.spinner("Simulating benchmark run..."):
+    if st.sidebar.button("Generate Transactions", type="primary"):
+        with st.spinner("Generating transaction data..."):
             try:
-                from data_gen.simulator import BenchmarkSimulator
-                sim = BenchmarkSimulator(duration_minutes=duration)
-                df = sim.generate_base_metrics()
-                # Inject some random anomalies for demonstration
-                df = sim.inject_anomalies(df, anomaly_ratio=0.1)
+                import random
+                from datetime import datetime, timedelta
+                data = []
+                for i in range(duration):
+                    data.append({
+                        "transaction_id": f"TXN{1000+i}",
+                        "amount": round(random.uniform(10, 5000), 2),
+                        "tx_hour": random.randint(0, 23),
+                        "account_age_days": random.randint(1, 1000),
+                        "transaction_date": (datetime.now() - timedelta(hours=i)).strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                df = pd.DataFrame(data)
                 st.session_state["data"] = df
-                st.toast(f"Generated {len(df)} records!", icon="✅")
+                st.toast(f"Generated {len(df)} transactions!", icon="✅")
             except Exception as e:
-                st.error(f"Simulation failed: {e}")
+                st.error(f"Generation failed: {e}")
 
 elif data_source == "Upload CSV":
-    uploaded_file = st.sidebar.file_uploader("Upload Benchmark CSV", type="csv")
+    uploaded_file = st.sidebar.file_uploader("Upload Transaction CSV", type="csv")
     if uploaded_file:
         try:
             df = pd.read_csv(uploaded_file)
@@ -107,7 +84,7 @@ if df is not None:
     st.divider()
     
     # Top Section: Data Preview
-    st.subheader("📊 Raw Benchmark Metrics")
+    st.subheader("📊 Raw Transaction Metrics")
     st.dataframe(df.head(), use_container_width=True)
     
     col1, col2 = st.columns([1, 4])
@@ -115,23 +92,23 @@ if df is not None:
         analyze_btn = st.button("🔍 Analyze with AI", type="primary", use_container_width=True)
     
     if analyze_btn:
-        with st.spinner("🤖 AI is analyzing performance..."):
+        with st.spinner("🤖 AI is analyzing transactions..."):
             try:
                 # Prepare data for AI
                 metrics = df.to_dict(orient="records")
                 
-                # Explicitly check for required columns here too, to bypass any caching issues
-                required_cols = ["cpu_usage", "memory_usage", "disk_io", "network_latency", "throughput"]
+                # Validation for transaction columns
+                required_cols = ["amount", "tx_hour", "account_age_days"]
                 missing = [c for c in required_cols if c not in df.columns]
                 if missing:
-                     raise ValueError(f"Required benchmark columns missing: {', '.join(missing)}")
+                     raise ValueError(f"Required transaction columns missing: {', '.join(missing)}")
                 
                 results = ai.detect_anomalies(metrics)
                 
                 # Merge results back to DF
                 results_df = pd.DataFrame(results)
                 
-                # Rename detection column to avoid collision if input already has it
+                # Rename detection column to avoid collision
                 if "is_anomaly" in results_df.columns:
                     results_df.rename(columns={"is_anomaly": "detected_anomaly"}, inplace=True)
                 
@@ -141,7 +118,6 @@ if df is not None:
                 st.toast("Analysis Complete!", icon="🎉")
             except ValueError as ve:
                 st.error(f"❌ **Invalid Data Format:** {ve}")
-                st.info("💡 **Tip:** Use the 'Download Sample Template' button in the sidebar to see the required format.")
             except Exception as e:
                 st.error(f"Analysis failed: {e}")
 
@@ -153,39 +129,37 @@ if "results" in st.session_state:
     # KPI Metrics
     try:
         avg_score = res["performance_score"].mean()
-        # Use detected_anomaly column we created
         anomalies_count = res["detected_anomaly"].sum() 
-        total_records = len(res)
+        total_amount = res["amount"].sum()
         
         kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric("Average Health Score", f"{avg_score:.1f} / 100", delta_color="normal")
-        kpi2.metric("Anomalies Detected", f"{anomalies_count}", delta_color="inverse")
-        kpi3.metric("Total Data Points", f"{total_records}")
+        kpi1.metric("Average Risk Score", f"{avg_score:.1f} / 100", delta_color="normal")
+        kpi2.metric("Flagged Anomalies", f"{anomalies_count}", delta_color="inverse")
+        kpi3.metric("Total Transaction Volume", f"${total_amount:,.2f}")
     except KeyError as e:
         st.error(f"Missing expected columns in results: {e}")
 
     # Charts
-    st.subheader("📈 System Performance Trends")
-    chart_data = res[["cpu_usage", "memory_usage", "performance_score"]]
+    st.subheader("📈 Transaction Value Trends")
+    chart_data = res[["amount", "performance_score"]]
     st.line_chart(chart_data)
 
     # Anomaly Drill-down
     if anomalies_count > 0:
-        st.subheader("🚨 Detected Anomalies")
+        st.subheader("🚨 Identified High-Risk Transactions")
         anomaly_df = res[res["detected_anomaly"] == True]
         
         for idx, row in anomaly_df.iterrows():
-            with st.status(f"Anomaly Detected at Index {idx} (Score: {row['performance_score']})", state="error"):
-                st.write(f"**Recommendation:** {row['recommendation']}")
+            with st.status(f"Flagged Transaction {row.get('transaction_id', idx)} (Score: {row['performance_score']})", state="error"):
+                st.write(f"**AI Insight:** {row['recommendation']}")
                 st.json({
-                    "CPU": f"{row['cpu_usage']}%",
-                    "Memory": f"{row['memory_usage']} MB",
-                    "Latency": f"{row['network_latency']} ms",
-                    "Throughput": f"{row['throughput']} req/s"
+                    "Amount": f"${row['amount']:,.2f}",
+                    "Hour": f"{row['tx_hour']}:00",
+                    "Account Age": f"{row['account_age_days']} days",
                 })
     else:
-        st.success("✅ No anomalies detected. System is running smoothly.")
+        st.success("✅ No suspicious patterns detected. Transactions appear normal.")
 
     # Full Data Table
-    with st.expander("📂 View Full Analysis Report"):
+    with st.expander("📂 View Full Risk Analysis Report"):
         st.dataframe(res, use_container_width=True)
