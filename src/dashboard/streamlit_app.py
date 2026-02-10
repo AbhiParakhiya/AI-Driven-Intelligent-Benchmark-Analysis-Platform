@@ -28,6 +28,34 @@ It detects anomalies, scores performance, and provides actionable recommendation
 st.sidebar.header("⚙️ Configuration")
 data_source = st.sidebar.radio("Select Data Source", ["Generate Synthetic Data", "Upload CSV"])
 
+if data_source == "Upload CSV":
+    st.sidebar.info("""
+    **Required CSV Columns:**
+    - `cpu_usage` (%)
+    - `memory_usage` (MB)
+    - `disk_io` (MB/s)
+    - `network_latency` (ms)
+    - `throughput` (req/s)
+    """)
+    
+    # Provide a sample template for download
+    sample_data = {
+        "cpu_usage": [45.2, 88.1, 32.5],
+        "memory_usage": [3072, 7168, 2048],
+        "disk_io": [120, 5, 150],
+        "network_latency": [25, 450, 15],
+        "throughput": [1200, 300, 1400]
+    }
+    sample_df = pd.DataFrame(sample_data)
+    csv = sample_df.to_csv(index=False).encode('utf-8')
+    st.sidebar.download_button(
+        label="📥 Download Sample Template",
+        data=csv,
+        file_name="benchmark_template.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
 # --- AI Engine Loading ---
 @st.cache_resource
 def load_ai_engine():
@@ -103,6 +131,9 @@ if df is not None:
                 
                 st.session_state["results"] = final_df
                 st.toast("Analysis Complete!", icon="🎉")
+            except ValueError as ve:
+                st.error(f"❌ **Invalid Data Format:** {ve}")
+                st.info("💡 **Tip:** Use the 'Download Sample Template' button in the sidebar to see the required format.")
             except Exception as e:
                 st.error(f"Analysis failed: {e}")
 

@@ -57,6 +57,12 @@ class BenchmarkAI:
         df = pd.DataFrame(metrics)
         features = ["cpu_usage", "memory_usage", "disk_io", "network_latency", "throughput"]
         
+        # Validate that all required features are present
+        missing_features = [f for f in features if f not in df.columns]
+        if missing_features:
+            raise ValueError(f"Missing required benchmark columns: {', '.join(missing_features)}. "
+                             "Please ensure your CSV contains these metrics.")
+        
         X = scaler.transform(df[features])
         predictions = model.predict(X) # -1 for anomaly, 1 for normal
         
@@ -78,26 +84,26 @@ class BenchmarkAI:
         """Calculates a 0-100 performance score based on weighted metrics."""
         # Weights (higher usage/latency = lower score)
         # We invert the metrics to get a score where higher is better.
-        # This is a simplified heuristic.
         
         # Max-Min Normalization bounds (approximate from data gen)
         max_cpu = 100
         max_mem = 8192
         max_latency = 1000
-        max_io = 0 # Higher IO is usually good, but wait, bottlenecks are bad? 
-                   # Let's assume high throughput is good, low latency is good.
-                   # High CPU/Mem is "load" but if it's too high it's bad.
         
         # Let's define score as: 100 - (deductions)
         score = 100
         
-        if row["cpu_usage"] > 80: score -= 20
-        if row["memory_usage"] > 6000: score -= 20
-        if row["network_latency"] > 200: score -= 30
-        
-        # Throughput bonus
-        if row["throughput"] > 1000: score += 10
-        
+        try:
+            if row.get("cpu_usage", 0) > 80: score -= 20
+            if row.get("memory_usage", 0) > 6000: score -= 20
+            if row.get("network_latency", 0) > 200: score -= 30
+            
+            # Throughput bonus
+            if row.get("throughput", 0) > 1000: score += 10
+        except Exception:
+            # Fallback if row is not dict-like or missing keys (though upstream validates)
+            pass
+            
         return max(0, min(100, score))
 
     def generate_recommendation(self, row, is_anomaly):
@@ -107,17 +113,20 @@ class BenchmarkAI:
         if is_anomaly:
             recommendations.append("Anomaly Detected! Immediate investigation required.")
         
-        if row["cpu_usage"] > 85:
-            recommendations.append("High CPU Usage: Consider scaling up CPU resources or optimizing process threads.")
-        
-        if row["memory_usage"] > 6000:
-            recommendations.append("High Memory Usage: Potential memory leak or insufficient RAM. check allocators.")
+        try:
+            if row.get("cpu_usage", 0) > 85:
+                recommendations.append("High CPU Usage: Consider scaling up CPU resources or optimizing process threads.")
             
-        if row["network_latency"] > 100:
-            recommendations.append("Network Lag: Check regional endpoints or CDN configuration.")
-            
-        if row["disk_io"] < 10:
-            recommendations.append("Low Disk I/O: Possible bottleneck in storage subsystem.")
+            if row.get("memory_usage", 0) > 6000:
+                recommendations.append("High Memory Usage: Potential memory leak or insufficient RAM. check allocators.")
+                
+            if row.get("network_latency", 0) > 100:
+                recommendations.append("Network Lag: Check regional endpoints or CDN configuration.")
+                
+            if row.get("disk_io", 0) < 10:
+                recommendations.append("Low Disk I/O: Possible bottleneck in storage subsystem.")
+        except Exception:
+            pass
 
         if not recommendations:
             recommendations.append("System performing within normal parameters.")
